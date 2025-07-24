@@ -1,0 +1,29 @@
+<launch>
+  <!-- <arg name="input" default="omega_x" /> -->
+  <arg name="node_start_delay" default="5.0" />
+
+  <!-- ROS IGTL bridge node to get frame transformation from EM Tracker -->
+  <param name="RIB_server_ip" value="127.0.0.1" type="str" />
+  <param name="RIB_port" value="18944" type="int" />
+  <param name="RIB_type" value="client" type="str" />
+  <node pkg="ros_igtl_bridge" type="ros_igtl_bridge_node" name="ros_igtl_bridge_node" output="log" />
+
+  <!-- Communication node with teensy using rosserial_arduino -->
+  <node pkg="rosserial_arduino" type="serial_node.py" name="pneumatic_3_chamber" output="screen">
+    <param name="port" value="/dev/ttyACM0" />
+    <param name="baud" value="57600" />
+  </node>
+
+  <rosparam command="load" file="$(find pneumatic_endoscope_controller)/param/pneumatic_endoscope.yaml" />
+  <node name="move_to_start" pkg="pneumatic_endoscope_controller" type="move_to_start.py" output="screen" />
+  <!-- Record the module bending and reference pressure into rosbag -->
+  <node pkg="rosbag" type="record" name="rosbag_record_characterization"
+    args="record -o $(find pneumatic_endoscope_controller)/rosbag/ /control/p_chamber1 /control/p_chamber2 /control/p_chamber3 /IGTL_TRANSFORM_IN /end_effector/bending_angles" />
+
+  <node name="ramp_input" pkg="pneumatic_endoscope_controller" type="ramp_input.py" output="screen" launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' "/>
+  <node name="get_end_effector_pose" pkg="pneumatic_endoscope_controller" type="get_end_effector_pose.py" output="screen" required="true" launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' "/>
+
+  <include file="$(find pid)/launch/pneumatic_control.launch"/>  
+
+  <include file="$(find subscriber_igtl_bridge)/launch/subscriber_IGTL_Bridge.launch"/>
+</launch>
